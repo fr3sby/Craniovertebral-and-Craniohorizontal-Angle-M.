@@ -90,8 +90,9 @@ class CranioAngleApp:
         center_panel.columnconfigure(0, weight=1)
 
         self.instructions_var = tk.StringVar(
-            value="Adım 1: C7 noktasına tıklayın → Adım 2: Tragus → Adım 3: Cantus"
+            value="Sıra: C7 → Tragus → Cantus. Sonrasında noktaları sürükleyerek düzeltin."
         )
+        center_panel.rowconfigure(0, minsize=34)
         ttk.Label(center_panel, textvariable=self.instructions_var, style="Header.TLabel").grid(
             row=0, column=0, sticky="w", pady=(0, 6)
         )
@@ -111,10 +112,12 @@ class CranioAngleApp:
         self.cv_var = tk.StringVar(value="CV Açısı: -")
         self.cr_var = tk.StringVar(value="CR Açısı: -")
         self.ch_var = tk.StringVar(value="CH Açısı: -")
+        self.point_status_var = tk.StringVar(value="Nokta durumu: C7, Tragus, Cantus bekleniyor")
 
         ttk.Label(right_panel, textvariable=self.cv_var).pack(anchor="w", pady=4)
         ttk.Label(right_panel, textvariable=self.cr_var).pack(anchor="w", pady=4)
         ttk.Label(right_panel, textvariable=self.ch_var).pack(anchor="w", pady=4)
+        ttk.Label(right_panel, textvariable=self.point_status_var, wraplength=250).pack(anchor="w", pady=4)
 
         ttk.Separator(right_panel, orient="horizontal").pack(fill="x", pady=10)
 
@@ -413,13 +416,13 @@ class CranioAngleApp:
                 missing.append("Tragus")
             if self.current_landmarks.cantus is None:
                 missing.append("Cantus")
-            self.instructions_var.set("Eksik nokta: " + ", ".join(missing))
+            self.point_status_var.set("Eksik nokta: " + ", ".join(missing))
             return
 
         self.cv_var.set(f"CV Açısı: {angles['cv']:.2f}°")
         self.cr_var.set(f"CR Açısı: {angles['cr']:.2f}°")
         self.ch_var.set(f"CH Açısı: {angles['ch']:.2f}°")
-        self.instructions_var.set("Noktaları sürükleyerek düzeltin. Sonuçlar anlık güncelleniyor.")
+        self.point_status_var.set("Tüm noktalar tamam. Sürükleyerek ince ayar yapabilirsiniz.")
 
         if self.current_image_path:
             self.angle_cache[self.current_image_path.name] = angles
