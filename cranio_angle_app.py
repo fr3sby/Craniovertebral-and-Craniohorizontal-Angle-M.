@@ -1,4 +1,5 @@
 import math
+import shutil
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,8 +11,19 @@ from tkinter import filedialog, messagebox, ttk
 
 from PIL import ExifTags, Image, ImageTk
 
+HEIF_ENABLED = False
+try:
+    from pillow_heif import register_heif_opener
+
+    register_heif_opener()
+    HEIF_ENABLED = True
+except Exception:
+    pass
+
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+if HEIF_ENABLED:
+    IMAGE_EXTENSIONS.update({".heic", ".heif"})
 DB_FILE_NAME = "angle_measurements.db"
 EXCEL_FILE_NAME = "angle_measurements.xlsx"
 
@@ -129,11 +141,19 @@ class CranioAngleApp:
         )
         ttk.Button(right_panel, text="📊 Tümünü Excel'e Aktar", command=self.export_to_excel).pack(fill="x", pady=6)
 
+        ttk.Separator(right_panel, orient="horizontal").pack(fill="x", pady=10)
+        ttk.Button(right_panel, text="↺ Sola Döndür", command=lambda: self.rotate_current_image(-90)).pack(fill="x", pady=4)
+        ttk.Button(right_panel, text="↻ Sağa Döndür", command=lambda: self.rotate_current_image(90)).pack(fill="x", pady=4)
+
+        bottom_actions = ttk.Frame(right_panel)
+        bottom_actions.pack(fill="x", pady=(8, 0), side="bottom")
+        ttk.Button(bottom_actions, text="🗑 Resmi Sil", command=self.move_current_image_to_deleted).pack(side="right")
+
         ttk.Label(
             right_panel,
             text="Noktaları sürükleyerek düzeltin. Açılar anlık güncellenir.",
             wraplength=250,
-        ).pack(anchor="w", pady=(15, 0))
+        ).pack(anchor="w", pady=(10, 0))
 
     def select_folder(self):
         selected = filedialog.askdirectory(title="Fotoğraf klasörünü seçin")
@@ -450,6 +470,84 @@ class CranioAngleApp:
     def _update_ui_metadata(self, image_path: Path):
         capture_date = self._extract_capture_date(image_path)
         self.meta_var.set(f"Görsel tarihi: {capture_date}")
+
+    def rotate_current_image(self, angle_degrees: int):
+        if not self.current_image_path:
+            messagebox.showwarning("Uyarı", "Önce bir görsel seçin.")
+            return
+
+        try:
+            with Image.open(self.current_image_path) as img:
+                rotated = img.rotate(-angle_degrees, expand=True)
+                exif = img.info.get("exif")
+                save_kwargs = {"exif": exif} if exif else {}
+                rotated.save(self.current_image_path, **save_kwargs)
+        except Exception as e:
+            messagebox.showerror("Hata", f"Görsel döndürülemedi:\n{e}")
+            return
+
+        self.current_landmarks = LandmarkSet()
+        self.landmarks_by_image[self.current_image_path.name] = LandmarkSet()
+        self.angle_cache.pop(self.current_image_path.name, None)
+        if self.db_conn is not None:
+            self.db_conn.execute("DELETE FROM measurements WHERE image_name = ?", (self.current_image_path.name,))
+            self.db_conn.commit()
+
+        self._load_image(self.current_image_path)
+        self._render_canvas()
+        self._update_ui_metadata(self.current_image_path)
+        self._update_angle_outputs()
+
+    def move_current_image_to_deleted(self):
+        if not self.current_image_path or not self.folder:
+            messagebox.showwarning("Uyarı", "Önce bir görsel seçin.")
+            return
+
+        answer = messagebox.askyesno("Onay", f"{self.current_image_path.name} görselini deleted klasörüne taşımak istiyor musunuz?")
+        if not answer:
+            return
+
+        deleted_dir = self.folder / "deleted"
+        deleted_dir.mkdir(exist_ok=True)
+
+        destination = deleted_dir / self.current_image_path.name
+        stem = self.current_image_path.stem
+        suffix = self.current_image_path.suffix
+        idx = 1
+        while destination.exists():
+            destination = deleted_dir / f"{stem}_{idx}{suffix}"
+            idx += 1
+
+        try:
+            shutil.move(str(self.current_image_path), str(destination))
+        except Exception as e:
+            messagebox.showerror("Hata", f"Görsel taşınamadı:\n{e}")
+            return
+
+        if self.db_conn is not None:
+            self.db_conn.execute("DELETE FROM measurements WHERE image_name = ?", (self.current_image_path.name,))
+            self.db_conn.commit()
+
+        old_name = self.current_image_path.name
+        self.landmarks_by_image.pop(old_name, None)
+        self.angle_cache.pop(old_name, None)
+
+        self.images = [p for p in self.images if p.name != old_name]
+        self.image_listbox.delete(0, tk.END)
+        for img in self.images:
+            self.image_listbox.insert(tk.END, img.name)
+
+        if self.images:
+            self.image_listbox.selection_set(0)
+            self.on_image_select(None)
+        else:
+            self.current_image_path = None
+            self.current_landmarks = LandmarkSet()
+            self.original_image = None
+            self.tk_image = None
+            self.canvas.delete("all")
+            self.meta_var.set("Görsel tarihi: -")
+            self._update_angle_outputs()
 
     def _auto_save_if_complete(self):
         if self._calculate_angles():

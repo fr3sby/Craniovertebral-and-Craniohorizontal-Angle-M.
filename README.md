@@ -14,6 +14,8 @@ Bu proje, fotoğraflar üzerinden aşağıdaki açıların manuel landmark işar
 - Noktaları sürükleyip konumu düzeltme
 - Açıyı gerçek zamanlı hesaplama ve çizgilerle görselleştirme
 - Sonuçları sağ panelde metin olarak gösterme
+- Sağa/sola döndür butonları ile görüntüyü döndürme
+- Resmi `deleted/` klasörüne taşıma (silme)
 - Ölçümleri seçili klasörde SQLite veritabanına otomatik kaydetme (`angle_measurements.db`)
 - Tüm sonuçları Excel'e aktarma (`angle_measurements.xlsx`)
 
@@ -22,7 +24,7 @@ Bu proje, fotoğraflar üzerinden aşağıdaki açıların manuel landmark işar
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install pillow pandas openpyxl
+pip install pillow pandas openpyxl pillow-heif
 ```
 
 ## Çalıştırma
@@ -32,6 +34,8 @@ python cranio_angle_app.py
 ```
 
 ## Kayıt Formatı (Excel)
+
+- Desteklenen formatlar: JPG, JPEG, PNG, BMP, TIF/TIFF, WEBP, HEIC/HEIF (HEIC için `pillow-heif`)
 
 - Görsel adı
 - Görsel tarihi (EXIF'ten, yoksa dosya oluşturma/değiştirme zamanı)
